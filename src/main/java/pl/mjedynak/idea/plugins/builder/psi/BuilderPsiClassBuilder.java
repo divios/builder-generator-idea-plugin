@@ -1,30 +1,24 @@
 package pl.mjedynak.idea.plugins.builder.psi;
 
-import com.intellij.psi.JavaDirectoryService;
-import com.intellij.psi.JavaPsiFacade;
-import com.intellij.psi.PsiClass;
-import com.intellij.psi.PsiElementFactory;
-import com.intellij.psi.PsiField;
-import com.intellij.psi.PsiMethod;
-import com.intellij.psi.PsiModifierList;
-import com.intellij.psi.PsiParameter;
-import com.intellij.psi.PsiType;
+import com.intellij.psi.*;
+import com.intellij.psi.util.PsiUtil;
 import org.apache.commons.lang.StringUtils;
 import pl.mjedynak.idea.plugins.builder.settings.CodeStyleSettings;
 import pl.mjedynak.idea.plugins.builder.verifier.PsiFieldVerifier;
 import pl.mjedynak.idea.plugins.builder.writer.BuilderContext;
 
+import java.text.MessageFormat;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.intellij.openapi.util.text.StringUtil.isVowel;
 
 public class BuilderPsiClassBuilder {
 
-    private static final String PRIVATE_STRING = "private";
     private static final String SPACE = " ";
     private static final String A_PREFIX = " a";
     private static final String AN_PREFIX = " an";
@@ -110,9 +104,35 @@ public class BuilderPsiClassBuilder {
         } else {
             constructor = elementFactory.createConstructor();
         }
-        constructor.getModifierList().setModifierProperty(PRIVATE_STRING, true);
+        constructor.getModifierList().setModifierProperty(PsiModifier.PUBLIC, true);
         builderClass.add(constructor);
         return this;
+    }
+
+    public BuilderPsiClassBuilder withPublicConstructorGenerator() {
+        PsiMethod constructor;
+
+        String constructorStr = MessageFormat.format("{0}({1} {2})'{' {3}; }",
+                builderClassName, srcClassName, srcClassFieldName, generateConstructorSetters());
+
+        constructor = elementFactory.createMethodFromText(constructorStr, srcClass);
+
+        constructor.getModifierList().setModifierProperty(PsiModifier.PUBLIC, true);
+        builderClass.add(constructor);
+        return this;
+    }
+
+    public String generateConstructorSetters() {
+        StringBuilder sb = new StringBuilder();
+        for (PsiField field : new HashSet<>(allSelectedPsiFields)) {
+            sb.append("this.").append(field.getName()).append(" = ")
+                    .append(srcClassFieldName).append(".")
+                    .append("get").append(StringUtils.capitalize(field.getName()))
+                    .append("()").append(";");
+        }
+
+        removeLastSemicolon(sb);
+        return sb.toString();
     }
 
     public BuilderPsiClassBuilder withInitializingMethod() {
@@ -193,6 +213,11 @@ public class BuilderPsiClassBuilder {
         buildMethodText.append(" }");
         PsiMethod buildMethod = elementFactory.createMethodFromText(buildMethodText.toString(), srcClass);
         builderClass.add(buildMethod);
+
+        createAsBuilderMethod();
+        createStaticBuilderConstructor();
+        createWitherInterface();
+
         return builderClass;
     }
 
@@ -249,6 +274,79 @@ public class BuilderPsiClassBuilder {
         }
         removeLastSemicolon(sb);
         return sb.toString();
+    }
+
+    private void createStaticBuilderConstructor() {
+        String methodBody = "return new " + builderClassName + "();";
+
+        PsiMethod method = elementFactory.createMethodFromText(
+                builderClassName + " builder() { " + methodBody + " }", srcClass);
+
+        PsiUtil.setModifierProperty(method, PsiModifier.PUBLIC, true);
+        PsiUtil.setModifierProperty(method, PsiModifier.STATIC, true);
+
+        PsiElement firstChild = srcClass.getLBrace();
+
+        srcClass.addAfter(method, firstChild);
+    }
+
+    private void createAsBuilderMethod() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append(builderClassName)
+                .append(" with() { return new ").append(builderClassName)
+                .append("(this); }");
+
+        PsiMethod method = elementFactory.createMethodFromText(sb.toString(), srcClass);
+        PsiUtil.setModifierProperty(method, PsiModifier.PUBLIC, true);
+        PsiElement lastChild = srcClass.getLastChild();
+
+        srcClass.addBefore(method, lastChild);
+    }
+
+    private void createWitherInterface() {
+        PsiClass withInterface = elementFactory.createInterface("With");
+
+        createWithMethod(withInterface);
+        createWithDefaultMethods(withInterface);
+
+        PsiElement lastChild = builderClass.getLastChild();
+        builderClass.addBefore(withInterface, lastChild);
+
+        /**
+        withInterface.getContainingClass().add(builderClass);
+
+        PsiElement a = elementFactory.createClassReferenceElement(withInterface);
+        srcClass.getLBrace().addBefore(a, srcClass); **/
+    }
+
+    private void createWithMethod(PsiClass withInterface) {
+        String methodStr = builderClassName + " with();";
+        PsiMethod method = elementFactory.createMethodFromText(methodStr, withInterface);
+
+        withInterface.addAfter(method, withInterface.getLBrace());
+    }
+
+    private void createWithDefaultMethods(PsiElement withInterface) {
+        for (PsiField psiFieldsForSetter : allSelectedPsiFields.stream().distinct().collect(Collectors.toList())) {
+            StringBuilder sb = new StringBuilder();
+
+            String fieldNameUppercase = StringUtils.capitalize(psiFieldsForSetter.getName());
+            String type = psiFieldsForSetter.getType().getCanonicalText();
+            String normalFieldName = psiFieldsForSetter.getName();
+
+            sb.append("default ").append(srcClassName).append(" with")
+                    .append(fieldNameUppercase)
+                    .append("(").append(type).append(" ").append(normalFieldName).append(") {")
+                    .append("return with().with").append(fieldNameUppercase)
+                    .append("(").append(normalFieldName).append(").build();")
+                    .append(" }");
+
+            PsiMethod method = elementFactory.createMethodFromText(sb.toString(), withInterface);
+            PsiUtil.setModifierProperty(method, PsiModifier.PUBLIC, true);
+
+            withInterface.addBefore(method, withInterface.getLastChild());
+        }
     }
 
     private String getDefaultValue(PsiType type) {

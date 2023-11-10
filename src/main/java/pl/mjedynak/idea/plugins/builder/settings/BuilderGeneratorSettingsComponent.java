@@ -16,13 +16,15 @@ public class BuilderGeneratorSettingsComponent {
         private final JBCheckBox innerBuilderCheckBox = new JBCheckBox("Inner builder");
         private final JBCheckBox butMethodCheckBox = new JBCheckBox("'but' method'");
         private final JBCheckBox useSinglePrefixCheckBox = new JBCheckBox("Use single prefix");
+        private final JBCheckBox generateStaticBuilderMethodBox = new JBCheckBox("Generate static builder method");
 
         public BuilderGeneratorSettingsComponent() {
             myMainPanel = FormBuilder.createFormBuilder()
                     .addLabeledComponent(new JBLabel("Default prefix: "), defaultMethodPrefixText, 1, false)
                     .addComponent(innerBuilderCheckBox, 1)
-                    .addComponent(butMethodCheckBox, 1)
-                    .addComponent(useSinglePrefixCheckBox, 1)
+                    //.addComponent(butMethodCheckBox, 1)
+                    //.addComponent(useSinglePrefixCheckBox, 1)
+                    .addComponent(generateStaticBuilderMethodBox)
                     .addComponentFillVertically(new JPanel(), 0)
                     .getPanel();
         }
@@ -53,7 +55,8 @@ public class BuilderGeneratorSettingsComponent {
         }
 
         public boolean isButMethod() {
-            return butMethodCheckBox.isSelected();
+            //return butMethodCheckBox.isSelected();
+            return false;
         }
 
         public void setButMethod(boolean isButMethod) {
@@ -61,7 +64,16 @@ public class BuilderGeneratorSettingsComponent {
         }
 
         public boolean isUseSinglePrefix() {
-            return useSinglePrefixCheckBox.isSelected();
+            //return useSinglePrefixCheckBox.isSelected();
+            return false;
+        }
+
+        public void setGenerateBuilderMethod(boolean isGenerateBuilderMethod) {
+            generateStaticBuilderMethodBox.setSelected(isGenerateBuilderMethod);
+        }
+
+        public boolean isGenerateBuilderMethod() {
+            return generateStaticBuilderMethodBox.isSelected();
         }
 
         public void setUseSinglePrefix(boolean isUseSinglePrefix) {
