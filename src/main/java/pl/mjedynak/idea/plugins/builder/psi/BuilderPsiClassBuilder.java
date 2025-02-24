@@ -215,6 +215,7 @@ public class BuilderPsiClassBuilder {
         builderClass.add(buildMethod);
 
         createAsBuilderMethod();
+        createStaticEmptyMethod();
         createStaticBuilderConstructor();
         createWitherInterface();
 
@@ -281,6 +282,20 @@ public class BuilderPsiClassBuilder {
 
         PsiMethod method = elementFactory.createMethodFromText(
                 builderClassName + " builder() { " + methodBody + " }", srcClass);
+
+        PsiUtil.setModifierProperty(method, PsiModifier.PUBLIC, true);
+        PsiUtil.setModifierProperty(method, PsiModifier.STATIC, true);
+
+        PsiElement firstChild = srcClass.getLBrace();
+
+        srcClass.addAfter(method, firstChild);
+    }
+
+    private void createStaticEmptyMethod() {
+        String methodBody = "return builder().build();";
+
+        PsiMethod method = elementFactory.createMethodFromText(
+                srcClassName + " empty() { " + methodBody + " }", srcClass);
 
         PsiUtil.setModifierProperty(method, PsiModifier.PUBLIC, true);
         PsiUtil.setModifierProperty(method, PsiModifier.STATIC, true);
